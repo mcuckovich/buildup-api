@@ -26,7 +26,6 @@ buildRouter.post("/builds", async (req, res) => {
     const client = await getClient();
     const newBuild: Build = req.body;
     const { title, kitColor, images } = newBuild;
-    console.log(newBuild);
     const existingBuild = await client
       .db()
       .collection<Build>("builds")
@@ -64,6 +63,7 @@ buildRouter.put("/builds/:id", async (req, res) => {
       .collection<Build>("builds")
       .replaceOne({ _id }, build);
     if (result.modifiedCount) {
+      build._id = _id;
       res.status(200).json(build);
     } else {
       res.status(404).json({ message: `Build with id ${_id} not found` });

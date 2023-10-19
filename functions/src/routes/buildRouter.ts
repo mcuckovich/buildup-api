@@ -52,6 +52,25 @@ buildRouter.post("/builds", async (req, res) => {
   }
 });
 
+buildRouter.put("/builds", async (req, res) => {
+  try {
+    const client = await getClient();
+    let builds: Build[] = req.body;
+
+    // Remove the _id fields from the array
+    builds = builds.map(({ _id, ...rest }) => rest);
+
+    await client.db().collection<Build>("builds").deleteMany({});
+    const result = await client
+      .db()
+      .collection<Build>("builds")
+      .insertMany(builds);
+    res.status(200).json(result);
+  } catch (err) {
+    errorResponse(err, res);
+  }
+});
+
 buildRouter.put("/builds/:id", async (req, res) => {
   try {
     const _id: ObjectId = new ObjectId(req.params.id);
@@ -62,7 +81,7 @@ buildRouter.put("/builds/:id", async (req, res) => {
       .db()
       .collection<Build>("builds")
       .replaceOne({ _id }, build);
-    if (result.modifiedCount) {
+    if (result.matchedCount) {
       build._id = _id;
       res.status(200).json(build);
     } else {

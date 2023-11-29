@@ -7,8 +7,8 @@ export default interface Part {
   name: string;
   colorCode: number | null;
   color: string;
-  kits: string[];
+  generalColor: string;
   partNumber: string;
   quantity: number;
-  requests: RequestedPart[];
+  requests?: RequestedPart[];
 }

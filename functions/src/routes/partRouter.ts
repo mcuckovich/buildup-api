@@ -21,56 +21,76 @@ partRouter.get("/parts", async (req, res) => {
   }
 });
 
-partRouter.put("/parts/:id/add/request", async (req, res) => {
+partRouter.put("/parts/add/request", async (req, res) => {
   try {
-    const _id: ObjectId = new ObjectId(req.params.id);
-    const requestedPart: any = req.body;
+    const requestedPart = req.body;
+
+    const employee = requestedPart.employee;
+    const hospital = requestedPart.hospital;
+
     const client = await getClient();
-    const partCollection = client.db().collection<Part>("parts");
+    const partCollection = client.db().collection("parts");
 
-    // Check if a matching request already exists
-    const existingRequestIndex = await partCollection.countDocuments({
-      _id,
-      "requests.hospital": requestedPart.hospital,
-      "requests.employee": requestedPart.employee,
-    });
+    const bulkUpdate = [];
 
-    if (existingRequestIndex > 0) {
-      // If an existing request exists, update it
-      const result = await partCollection.updateOne(
-        { _id, "requests.hospital": requestedPart.hospital },
-        {
+    for (const part of requestedPart.parts) {
+      const _id = new ObjectId(part.id);
+
+      const existingRequest = await partCollection.findOne({
+        _id,
+        "requests.employee": employee,
+        "requests.hospital": hospital,
+      });
+
+      if (existingRequest) {
+        // Existing request found, update the quantity
+        const update = {
           $inc: {
-            "requests.$.quantity": requestedPart.quantity,
-            quantity: requestedPart.quantity,
+            "requests.$.quantity": part.quantity,
+            quantity: part.quantity,
           },
-        }
-      );
+        };
 
-      if (result.modifiedCount) {
-        res.status(200).json({
-          message: `Request for part with id:${_id} has been updated`,
+        bulkUpdate.push({
+          updateOne: {
+            filter: {
+              _id,
+              "requests.employee": employee,
+              "requests.hospital": hospital,
+            },
+            update,
+          },
         });
       } else {
-        res.status(500).json({ message: "Failed to update the request" });
+        // No existing request found, create a new one
+        const update = {
+          $inc: { quantity: part.quantity },
+          $push: {
+            requests: {
+              ...part,
+              hospital,
+              employee,
+            },
+          },
+        };
+
+        bulkUpdate.push({
+          updateOne: {
+            filter: { _id },
+            update,
+          },
+        });
       }
+    }
+
+    const result = await partCollection.bulkWrite(bulkUpdate);
+
+    if (result.modifiedCount === requestedPart.parts.length) {
+      res.status(200).json({
+        message: `Requests for all parts have been updated`,
+      });
     } else {
-      // If no matching request exists, push a new one
-      const result = await partCollection.updateOne(
-        { _id },
-        {
-          $push: { requests: requestedPart },
-          $inc: { quantity: requestedPart.quantity },
-          // You can update other fields here if needed
-        }
-      );
-      if (result.modifiedCount) {
-        res
-          .status(200)
-          .json({ message: `Request for part with id:${_id} has been added` });
-      } else {
-        res.status(404).json({ message: `Part with id:${_id} not found` });
-      }
+      res.status(500).json({ message: "Failed to update the requests" });
     }
   } catch (err) {
     errorResponse(err, res);
